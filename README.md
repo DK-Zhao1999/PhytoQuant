@@ -1,13 +1,6 @@
 # PhytoQuant
 
-PhytoQuant is a cohort-resolved, direction-aware transcriptome-signature
-discovery engine for plants. Instead of treating differential expression as a
-single statistical call, it triangulates three orthogonal modeling frameworks,
-projects their evidence into one signed gene-level score, and then performs
-rank-based cross-cohort meta-analysis to recover compact, directionally labeled
-gene modules. The result is a transparent, auditable, and experimentally
-tractable pathway signature rather than a flat list of differentially expressed
-genes.
+PhytoQuant is a cohort-resolved, direction-aware transcriptome-signature discovery engine specifically designed for plant functional genomics. Unlike conventional differential expression workflows that reduce multi-cohort evidence to a flat list of genes, PhytoQuant triangulates three orthogonal statistical frameworks—DESeq2, edgeR, and limma-voom—under distinct distributional assumptions, fusing their evidence into a signed gene-level importance score. This statistical triangulation, rather than a simple consensus vote, attenuates method-specific biases while preserving biological directionality. Through cohort-level Robust Rank Aggregation, PhytoQuant separates reproducible regulatory signals from cohort-specific technical variation, enabling robust cross-study meta-analysis across ecotypes, stress treatments, developmental stages, or genetic backgrounds. The framework further models activation and inhibition as separate evidence streams, avoiding the information loss inherent in unsigned enrichment scores, and combines prior pathway annotations with data-driven de novo candidates through set-theoretic concordance filtering. Finally, redundancy-resolving consolidation via Sorensen-Dice similarity and hierarchical clustering delivers compact, directionally labeled gene modules—designated as ags* (activation) and igs* (inhibition)—that are immediately reusable for enrichment analysis, signature scoring, validation cohort testing, and wet-lab candidate prioritization. The result is a transparent, auditable, and experimentally tractable pathway signature rather than a static list of differentially expressed genes, positioning PhytoQuant as a principled solution for hypothesis-driven discovery in plant multi-cohort studies.
 
 ## Highlights
 
