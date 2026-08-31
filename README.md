@@ -93,6 +93,196 @@ flowchart TB
     R2 --> O3
 ```
 
+## Detailed plant-oriented workflow
+
+```mermaid
+flowchart TB
+
+    %% ================= PLANT MULTI-COHORT INPUT =================
+    subgraph INP["Plant multi-cohort input"]
+        direction TB
+        IN_COUNT["Raw RNA-seq count matrices<br/>genes x samples"]
+        IN_GROUP["Group annotations<br/>Tag / group (H vs L)"]
+        IN_PRIOR["Plant knowledge gene sets<br/>auxin, ethylene, GA, JA, SA, and others"]
+        IN_META["Cohort context<br/>ecotype, tissue, stress, development, genotype"]
+    end
+
+    %% ================= DATA CONTRACT AND QUALITY CONTROL =================
+    subgraph QC["Data contract and quality control"]
+        direction TB
+        QC_NAME["Resolve object names<br/><dataset>.Rdata and <dataset>_G.Rdata"]
+        QC_MATCH["Align samples between counts and annotations"]
+        QC_CONTRAST["Fix contrast orientation<br/>levels = c('L', 'H')"]
+        QC_MISSING{"Missing cohort files?"}
+        QC_SKIP["Warn and skip cohort"]
+    end
+
+    %% ================= TRIANGULATED DIFFERENTIAL EXPRESSION =================
+    subgraph DE["Triangulated differential expression"]
+        direction TB
+        DE_DES2["DESeq2<br/>size factors + NB dispersion + Wald test"]
+        DE_EDGER["edgeR<br/>norm factors + estimateDisp + QL F-test"]
+        DE_VOOM["limma-voom<br/>precision weights + lmFit + eBayes"]
+        DE_TRY{"Method error handling"}
+        DE_FAIL["Warn and retain successful methods"]
+    end
+
+    %% ================= SIGNED EVIDENCE FUSION =================
+    subgraph FUSE["Signed evidence fusion"]
+        direction TB
+        FUSE_MERGE["Gene-wise merge of method tables"]
+        FUSE_NA["Repair missing p-values and logFC"]
+        FUSE_P["Geometric-mean combined p-value"]
+        FUSE_LOGFC["Mean log-fold change"]
+        FUSE_IMP["Importance = logFC x -log10(p)"]
+        FUSE_ORDER["Rank genes by signed importance"]
+        FUSE_UP["De novo activation candidates"]
+        FUSE_DN["De novo inhibition candidates"]
+        FUSE_NO{"No successful method?"}
+        FUSE_NEXT["Skip cohort"]
+    end
+
+    %% ================= CROSS-COHORT ROBUST RANK AGGREGATION =================
+    subgraph RRA["Cross-cohort robust rank aggregation"]
+        direction TB
+        RRA_UP_RANK["Rank genes by decreasing importance"]
+        RRA_DN_RANK["Rank genes by increasing importance"]
+        RRA_AGG_UP["aggregateRanks: activation evidence"]
+        RRA_AGG_DN["aggregateRanks: inhibition evidence"]
+        RRA_THRESH{"Score < rra_p_threshold?"}
+        RRA_UP_SIG["Reproducible up-regulated genes"]
+        RRA_DN_SIG["Reproducible down-regulated genes"]
+    end
+
+    %% ================= KNOWLEDGE-GUIDED REFINEMENT =================
+    subgraph KNOW["Knowledge-guided refinement"]
+        direction TB
+        KNOW_PRIOR["Phytohormone and pathway gene sets"]
+        KNOW_DENOVO["Per-cohort de novo sets"]
+        KNOW_UNION["Candidate set pool"]
+        KNOW_CONC_UP["Intersect activation candidates with RRA-up"]
+        KNOW_CONC_DN["Intersect inhibition candidates with RRA-down"]
+        KNOW_FILTER{"Non-empty after filtering?"}
+    end
+
+    %% ================= REDUNDANCY-RESOLVING CONSOLIDATION =================
+    subgraph DEDUP["Redundancy-resolving consolidation"]
+        direction TB
+        DEDUP_SIM["Pairwise Sorensen-Dice similarity"]
+        DEDUP_DIST["Convert similarity to distance"]
+        DEDUP_HC["Hierarchical clustering"]
+        DEDUP_CUT["cutree at 1 - sorenson_threshold"]
+        DEDUP_MERGE["Merge cluster members by set union"]
+        DEDUP_UNIQUE["Remove duplicated modules"]
+        DEDUP_SIZE["Enforce min_geneset_size"]
+    end
+
+    %% ================= PARAMETER CONTROLS =================
+    subgraph PAR["Parameter controls"]
+        direction TB
+        PAR_VECTOR["vector: cohort names"]
+        PAR_DIR["data_dir: input directory"]
+        PAR_METHODS["methods: DESeq2 / edgeR / limma"]
+        PAR_IMP["importance_threshold"]
+        PAR_NA["max_na_ratio"]
+        PAR_RRA["rra_p_threshold"]
+        PAR_SDS["sorenson_threshold"]
+        PAR_LINK["linkage_method"]
+        PAR_MIN["min_geneset_size"]
+        PAR_SAVE["save_intermediate"]
+    end
+
+    %% ================= PLANT TRANSLATION-READY OUTPUT =================
+    subgraph OUT["Plant translation-ready output"]
+        direction TB
+        OUT_AGS["Activation modules<br/>(ags*)"]
+        OUT_IGS["Inhibition modules<br/>(igs*)"]
+        OUT_IMP["Gene-by-cohort importance matrix"]
+        OUT_RRA["RRA evidence tables"]
+        OUT_DOWN["Enrichment, scoring, validation, prioritization"]
+    end
+
+    %% ================= EDGES =================
+    IN_COUNT --> QC_NAME
+    IN_GROUP --> QC_NAME
+    PAR_VECTOR --> QC_NAME
+    PAR_DIR --> QC_NAME
+
+    QC_NAME --> QC_MATCH --> QC_CONTRAST --> QC_MISSING
+    QC_MISSING -->|yes| QC_SKIP
+    QC_MISSING -->|no| DE_DES2
+    QC_MISSING -->|no| DE_EDGER
+    QC_MISSING -->|no| DE_VOOM
+    PAR_METHODS --> DE_DES2
+    PAR_METHODS --> DE_EDGER
+    PAR_METHODS --> DE_VOOM
+
+    DE_DES2 --> DE_TRY
+    DE_EDGER --> DE_TRY
+    DE_VOOM --> DE_TRY
+    DE_TRY -->|success| FUSE_MERGE
+    DE_TRY -->|error| DE_FAIL
+    DE_FAIL --> FUSE_MERGE
+
+    FUSE_MERGE --> FUSE_NA --> FUSE_P
+    FUSE_MERGE --> FUSE_NA --> FUSE_LOGFC
+    FUSE_P --> FUSE_IMP
+    FUSE_LOGFC --> FUSE_IMP
+    FUSE_IMP --> FUSE_ORDER
+    FUSE_ORDER --> FUSE_UP
+    FUSE_ORDER --> FUSE_DN
+    PAR_IMP --> FUSE_UP
+    PAR_IMP --> FUSE_DN
+    PAR_NA --> FUSE_NA
+
+    FUSE_UP --> FUSE_NO
+    FUSE_DN --> FUSE_NO
+    FUSE_NO -->|no result| FUSE_NEXT
+    FUSE_NO -->|continue| RRA_UP_RANK
+    FUSE_NO -->|continue| RRA_DN_RANK
+    FUSE_UP --> RRA_UP_RANK
+    FUSE_DN --> RRA_DN_RANK
+
+    RRA_UP_RANK --> RRA_AGG_UP
+    RRA_DN_RANK --> RRA_AGG_DN
+    RRA_AGG_UP --> RRA_THRESH
+    RRA_AGG_DN --> RRA_THRESH
+    PAR_RRA --> RRA_THRESH
+    RRA_THRESH -->|up| RRA_UP_SIG
+    RRA_THRESH -->|down| RRA_DN_SIG
+
+    IN_PRIOR --> KNOW_PRIOR
+    FUSE_UP --> KNOW_DENOVO
+    FUSE_DN --> KNOW_DENOVO
+    KNOW_PRIOR --> KNOW_UNION
+    KNOW_DENOVO --> KNOW_UNION
+    RRA_UP_SIG --> KNOW_CONC_UP
+    RRA_DN_SIG --> KNOW_CONC_DN
+    KNOW_UNION --> KNOW_CONC_UP
+    KNOW_UNION --> KNOW_CONC_DN
+    KNOW_CONC_UP --> KNOW_FILTER
+    KNOW_CONC_DN --> KNOW_FILTER
+
+    KNOW_FILTER -->|activation| DEDUP_SIM
+    KNOW_FILTER -->|inhibition| DEDUP_SIM
+    DEDUP_SIM --> DEDUP_DIST --> DEDUP_HC --> DEDUP_CUT --> DEDUP_MERGE --> DEDUP_UNIQUE --> DEDUP_SIZE
+    PAR_SDS --> DEDUP_CUT
+    PAR_LINK --> DEDUP_HC
+    PAR_MIN --> DEDUP_SIZE
+
+    DEDUP_SIZE --> OUT_AGS
+    DEDUP_SIZE --> OUT_IGS
+    FUSE_IMP --> OUT_IMP
+    RRA_UP_SIG --> OUT_RRA
+    RRA_DN_SIG --> OUT_RRA
+    PAR_SAVE --> OUT_IMP
+
+    OUT_AGS --> OUT_DOWN
+    OUT_IGS --> OUT_DOWN
+    OUT_IMP --> OUT_DOWN
+    OUT_RRA --> OUT_DOWN
+```
+
 ## Methodological novelty and publication value
 
 PhytoQuant addresses a recurring bottleneck in plant functional genomics:
