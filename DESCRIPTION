@@ -1,0 +1,22 @@
+Package: PhytoQuant
+Type: Package
+Title: Integrated Directional Gene-Signature Discovery for Plant Transcriptomes
+Version: 0.1.0
+Authors@R: 
+    person("Dingkang", "Zhao", email = "dingkang.25@intl.zju.edu.cn",
+           role = c("aut", "cre"))
+Description: An integrated framework for multi-cohort differential expression
+    analysis and directional gene-signature construction in plant
+    transcriptomics. PhytoQuant combines DESeq2, edgeR, and limma with
+    robust rank aggregation, knowledge-guided refinement, and
+    Sorensen-Dice-based redundancy resolution to discover compact
+    activation and inhibition gene sets.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: 
+    R (>= 4.0.0)
+Imports: 
+    DESeq2,
+    edgeR,
+    limma,
+    RobustRankAggreg
