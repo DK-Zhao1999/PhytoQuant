@@ -1,25 +1,37 @@
 # PhytoQuant
 
-PhytoQuant is an integrated, direction-aware gene-signature discovery framework
-for plant transcriptome cohorts. It combines three differential-expression
-engines, robust cross-cohort evidence synthesis, knowledge-guided refinement,
-and Sorensen-Dice-based redundancy removal in a single reproducible pipeline.
+PhytoQuant is a cohort-resolved, direction-aware transcriptome-signature
+discovery engine for plants. Instead of treating differential expression as a
+single statistical call, it triangulates three orthogonal modeling frameworks,
+projects their evidence into one signed gene-level score, and then performs
+rank-based cross-cohort meta-analysis to recover compact, directionally labeled
+gene modules. The result is a transparent, auditable, and experimentally
+tractable pathway signature rather than a flat list of differentially expressed
+genes.
 
 ## Highlights
 
-- **Multi-engine differential expression.** DESeq2, edgeR, and limma-voom are
-  run in parallel and merged into one signed importance score per gene.
-- **Cross-cohort reproducibility.** Robust Rank Aggregation synthesizes evidence
-  across independent plant expression cohorts before gene selection.
-- **Direction-resolved signatures.** Activation and inhibition are discovered
-  separately, preserving the regulatory direction of each candidate gene set.
-- **Knowledge-guided de novo discovery.** Prior plant pathway gene sets are
-  integrated with data-driven de novo gene sets through concordance filtering.
-- **Redundancy-aware consolidation.** Sorensen-Dice similarity and hierarchical
-  clustering remove overlapping signatures while retaining compact gene sets.
-- **Translation-ready output.** The final `ags*` activation and `igs*`
-  inhibition panels are immediately usable for enrichment, scoring, and
-  experimental follow-up.
+- **Statistical triangulation, not consensus voting.** DESeq2, edgeR, and
+  limma-voom operate in parallel under distinct distributional assumptions.
+  Their evidence is fused into one signed importance score, attenuating
+  method-specific biases while preserving biological direction.
+- **Cohort-level rank meta-analysis.** Robust Rank Aggregation treats every
+  independent plant experiment as a ranking source, separating reproducible
+  regulatory signal from cohort-specific technical variation.
+- **Direction-resolved signature algebra.** Activation and inhibition are
+  modeled as separate evidence streams, avoiding the information loss that
+  occurs when unsigned enrichment scores collapse opposing regulators into one
+  value.
+- **Knowledge-aware de novo discovery.** Prior pathway annotations and
+  data-driven de novo candidates are combined through set-theoretic concordance
+  filtering, connecting hypothesis-driven biology with discovery-driven
+  statistics.
+- **Redundancy-resolving consolidation.** Sorensen-Dice similarity, hierarchical
+  clustering, and minimum-cardinality filtering jointly remove overlapping
+  modules while retaining the most parsimonious interpretable gene sets.
+- **Translation-first output.** Final `ags*` activation and `igs*` inhibition
+  panels are compact, named, and directly reusable for enrichment analysis,
+  signature scoring, validation cohorts, and candidate prioritization.
 
 ## Pipeline overview
 
@@ -81,6 +93,29 @@ flowchart TB
     R2 --> O3
 ```
 
+## Methodological novelty and publication value
+
+PhytoQuant addresses a recurring bottleneck in plant functional genomics:
+multi-cohort studies are abundant, but conventional differential-expression
+workflows rarely propagate the uncertainty and direction of evidence across
+cohorts. PhytoQuant reframes the problem as a hierarchical evidence-integration
+task, making it especially suitable for comparative studies across ecotypes,
+stress treatments, developmental stages, tissues, or genetic backgrounds.
+
+- **A reproducible analytical object.** Every result retains the underlying
+  importance matrix and rank-aggregation statistics, so reviewers can trace how
+  a final signature was derived instead of receiving only a gene list.
+- **Methodological heterogeneity as a feature.** By deliberately combining
+  negative-binomial and linear-model frameworks, PhytoQuant rewards genes whose
+  signal is robust across statistical paradigms rather than overfitted to one
+  package.
+- **Directional biological interpretation.** Separate activation and inhibition
+  panels make it possible to propose regulatory hypotheses directly from the
+  output, including candidate activators, repressors, and pathway-level switches.
+- **Immediate translational utility.** The compact `ags*` and `igs*` modules
+  are well suited to signature scoring, cross-study validation, co-expression
+  network annotation, and prioritization of targets for wet-lab validation.
+
 ## Installation
 
 Start from a clean R session and install the development dependencies:
@@ -111,9 +146,11 @@ library(PhytoQuant)
 
 ## Quick start with simulated plant data
 
-The complete example below is designed to run in a fresh R session. It first
-creates three independent plant RNA-seq-like count cohorts, then discovers
-activation and inhibition gene sets with `diffexp_integrate()`.
+The complete example below is designed to run in a fresh R session and to mimic
+the heterogeneity of a multi-cohort plant study. It first constructs three
+independent RNA-seq-like count cohorts with planted directional signal, then
+uses `diffexp_integrate()` to recover the planted activation and inhibition
+modules through the full evidence-integration workflow.
 
 ```r
 library(PhytoQuant)
@@ -192,12 +229,14 @@ head(result$importance_all)
 
 The planted activation genes are `PHYTO001`-`PHYTO010`, and the planted
 inhibition genes are `PHYTO011`-`PHYTO020`. When the three cohorts are analyzed
-and integrated, PhytoQuant returns these genes inside the compact final
-`ags*` and `igs*` panels.
+and integrated, PhytoQuant should return these genes inside the compact final
+`ags*` and `igs*` panels, while the returned importance matrices provide the
+full quantitative evidence trail for downstream reuse.
 
 ## Input data format
 
-For every name in `vector`, PhytoQuant expects two RData files in `data_dir`:
+PhytoQuant uses a minimal, cohort-oriented data contract. For every name in
+`vector`, two RData files must be present in `data_dir`:
 
 ```text
 <name>.Rdata
@@ -205,8 +244,8 @@ For every name in `vector`, PhytoQuant expects two RData files in `data_dir`:
 ```
 
 The first file must contain a raw count matrix assigned to an object named
-`<name>`. Rows are genes and columns are samples. The second file must contain
-a data frame assigned to `<name>_G` with columns:
+`<name>`, with genes as rows and samples as columns. The second file must
+contain a sample-level annotation data frame assigned to `<name>_G`:
 
 ```text
 Tag    group
@@ -216,7 +255,9 @@ S3     L
 S4     L
 ```
 
-The `group` values are interpreted relative to `levels = c("L", "H")`, so a
+The `group` values are interpreted relative to `levels = c("L", "H")`. This
+fixed contrast orientation ensures that every downstream signed statistic,
+including the final importance score, has a consistent biological meaning: a
 positive log-fold change corresponds to higher expression in `H`.
 
 ## Function reference
@@ -242,18 +283,18 @@ diffexp_integrate(
 
 | Argument | Description | Default |
 | --- | --- | --- |
-| `vector` | Dataset names to process. | required |
-| `geneSets_list` | Named list of prior knowledge gene sets. | required |
-| `data_dir` | Directory containing the RData files. | `getwd()` |
-| `importance_threshold` | Absolute importance threshold for de novo genes. | `10` |
-| `rra_p_threshold` | Cross-dataset robust-rank-aggregation p-value threshold. | `0.00001` |
-| `sorenson_threshold` | Sorensen-Dice threshold for merging redundant sets. | `0.6` |
-| `min_geneset_size` | Minimum genes per final gene set. | `5` |
-| `max_na_ratio` | Maximum missing-value proportion per gene. | `0.3` |
-| `save_intermediate` | Save per-dataset merged result tables. | `FALSE` |
-| `methods` | Differential-expression methods to run. | `c("DESeq2", "edgeR", "limma")` |
-| `linkage_method` | Clustering linkage for merging. | `"complete"` |
-| `verbose` | Print progress messages. | `TRUE` |
+| `vector` | Cohort identifiers whose rank evidence will be integrated. | required |
+| `geneSets_list` | Named prior-knowledge gene sets used to guide and refine discovery. | required |
+| `data_dir` | Directory containing the count and annotation RData files. | `getwd()` |
+| `importance_threshold` | Signed-evidence cutoff used to partition de novo up- and down-regulated genes. | `10` |
+| `rra_p_threshold` | Cross-cohort significance cutoff for robust rank aggregation. | `0.00001` |
+| `sorenson_threshold` | Similarity cutoff controlling redundancy removal among final modules. | `0.6` |
+| `min_geneset_size` | Minimum cardinality required for a reproducible final module. | `5` |
+| `max_na_ratio` | Maximum fraction of cohorts in which a gene may lack evidence. | `0.3` |
+| `save_intermediate` | Persist the per-cohort merged evidence tables for external audit. | `FALSE` |
+| `methods` | Orthogonal differential-expression backends used for triangulation. | `c("DESeq2", "edgeR", "limma")` |
+| `linkage_method` | Agglomerative linkage rule used during similarity clustering. | `"complete"` |
+| `verbose` | Emit trace-level progress diagnostics during the workflow. | `TRUE` |
 
 The function returns:
 
@@ -269,13 +310,16 @@ list(
 
 ## Notes
 
-1. The expression files are read with `load()` and are expected to contain raw
-   counts. DESeq2 and edgeR require non-negative integer counts.
-2. All input datasets are analyzed independently before evidence is integrated
-   across cohorts, so missing genes are handled explicitly by `max_na_ratio`.
-3. For exploratory runs on small or noisy simulations, relaxed thresholds such
-   as `importance_threshold = 1` and `rra_p_threshold = 0.01` make the output
-   easier to inspect without changing the method.
+1. PhytoQuant is designed around raw count matrices rather than normalized
+   expression values. This preserves the distributional assumptions of DESeq2
+   and edgeR and lets the workflow maintain a coherent, auditable evidence chain
+   from counts to final modules.
+2. Each cohort is analyzed independently before rank-level integration. Missing
+   genes are therefore handled explicitly by `max_na_ratio`, avoiding the
+   complete-case bias introduced by premature sample-level intersection.
+3. For exploratory runs on small or deliberately noisy simulations, relaxed
+   thresholds such as `importance_threshold = 1` and `rra_p_threshold = 0.01`
+   expose the full pipeline output without altering the statistical method.
 
 ## Author
 
